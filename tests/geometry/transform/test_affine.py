@@ -1356,6 +1356,27 @@ class TestGetShearMatrix(BaseTester):
         assert out.device.type == center.device.type, "Output device must match center device"
         assert out.dtype == center.dtype, "Output dtype must match center dtype"
 
+    @pytest.mark.parametrize(
+        "shears",
+        [
+            ("syx",),
+            ("sxy", "syx"),
+            ("syx", "szy"),
+            ("sxz", "szx"),
+            ("sxy", "syx", "szy"),
+            ("sxy", "sxz", "syx", "syz", "szx", "szy"),
+        ],
+    )
+    def test_get_shear_matrix3d_center_is_fixed(self, device, dtype, shears):
+        # The shearing center must map to itself for single and combined shears alike.
+        center = torch.tensor([[7.0, 23.0, 41.0]], device=device, dtype=dtype)
+        values = dict(zip(("sxy", "sxz", "syx", "syz", "szx", "szy"), (0.3, -0.2, 0.25, 0.15, -0.1, 0.2)))
+        kwargs = {name: torch.tensor([values[name]], device=device, dtype=dtype) for name in shears}
+        out = kornia.geometry.transform.get_shear_matrix3d(center, **kwargs)
+        center_h = torch.cat([center, torch.ones_like(center[:, :1])], dim=-1)
+        mapped = (out @ center_h[..., None])[:, :3, 0]
+        self.assert_close(mapped, center, atol=1e-4, rtol=1e-4)
+
 
 class TestTransformModuleBuffers(BaseTester):
     @pytest.mark.parametrize(

@@ -1310,6 +1310,7 @@ def get_affine_matrix3d(
     Convention:
         - ``center`` is ``(x, y, z)`` in pixels, origin at the top-left of the first depth
           slice (``z = 0``)
+        - ``center`` is a fixed point of the returned matrix for any combination of shears
         - ``angles`` are negated before delegating to :func:`get_projective_transform`, whose own
           rotation convention follows the right-hand rule (see
           :func:`kornia.geometry.conversions.axis_angle_to_rotation_matrix`)
@@ -1428,20 +1429,16 @@ def get_shear_matrix3d(
     szx_tan = torch.tan(szx)
     szy_tan = torch.tan(szy)
 
-    # compute translation matrix
-    m00, m10, m20, m01, m11, m21, m02, m12, m22 = _compute_shear_matrix_3d(
-        sxy_tan, sxz_tan, syx_tan, syz_tan, szx_tan, szy_tan
-    )
-
-    m03 = m01 * y + m02 * z
-    m13 = m10 * x + m11 * y + m12 * z - y
-    m23 = m20 * x + m21 * y + m22 * z - z
-
     # shear matrix is implemented with negative values
     sxy_tan, sxz_tan, syx_tan, syz_tan, szx_tan, szy_tan = -sxy_tan, -sxz_tan, -syx_tan, -syz_tan, -szx_tan, -szy_tan
     m00, m10, m20, m01, m11, m21, m02, m12, m22 = _compute_shear_matrix_3d(
         sxy_tan, sxz_tan, syx_tan, syz_tan, szx_tan, szy_tan
     )
+
+    # compute translation so that ``center`` is a fixed point: t = c - M @ c
+    m03 = x - (m00 * x + m01 * y + m02 * z)
+    m13 = y - (m10 * x + m11 * y + m12 * z)
+    m23 = z - (m20 * x + m21 * y + m22 * z)
 
     shear_mat = torch.stack([m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23], -1).view(-1, 3, 4)
     return convert_affinematrix_to_homography3d(shear_mat)
